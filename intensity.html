@@ -880,6 +880,21 @@
               ></div>
             </div>
 
+            <!-- Date Range Picker -->
+            <div class="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm" title="Select Date Range">
+               <div class="flex items-center gap-1 text-blue-600 dark:text-blue-400 px-1">
+                   <i class="fa-regular fa-calendar-days"></i>
+               </div>
+               <label class="text-sm font-bold text-gray-700 dark:text-gray-300 lang-hi">दिनांक:</label>
+               <label class="text-sm font-bold text-gray-700 dark:text-gray-300 lang-en">Date:</label>
+               
+               <input type="date" id="startDate" onchange="handleDateRangeChange()" class="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white transition-all hover:border-blue-400 cursor-pointer">
+               <span class="text-gray-400 font-bold text-xs">to</span>
+               <input type="date" id="endDate" onchange="handleDateRangeChange()" class="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm font-semibold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white transition-all hover:border-blue-400 cursor-pointer">
+               
+               <button onclick="clearDateRange()" class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors ml-1" title="Clear Date Range"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
             <!-- District Dropdown -->
             <div class="district-checkbox-dropdown">
               <button
@@ -911,7 +926,7 @@
               >
               <select
                 id="yearSelect"
-                onchange="loadData()"
+                onchange="handleYearChange()"
                 class="bg-white dark:bg-gray-800 border-none rounded-md px-3 py-1 text-lg font-bold focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
               ></select>
             </div>
@@ -1682,6 +1697,8 @@
       function handlePeriodSelection(checkbox, monthsStr) {
         const months = monthsStr.split(",");
         if (checkbox.checked) {
+          document.getElementById('startDate').value = '';
+          document.getElementById('endDate').value = '';
           months.forEach((m) => {
             if (!selectedMonths.includes(m)) selectedMonths.push(m);
           });
@@ -1695,12 +1712,35 @@
       function handleMonthSelection(checkbox) {
         const month = checkbox.value;
         if (checkbox.checked) {
+          document.getElementById('startDate').value = '';
+          document.getElementById('endDate').value = '';
           if (!selectedMonths.includes(month)) selectedMonths.push(month);
         } else {
           selectedMonths = selectedMonths.filter((m) => m !== month);
         }
         generateMonthCheckboxes();
         processAndRender();
+      }
+
+      function handleDateRangeChange() {
+        // When a date range is selected, clear any month/period selections
+        selectedMonths = [];
+        document.querySelectorAll('.month-chk, .period-chk').forEach(cb => cb.checked = false);
+        updateMonthDropdownText();
+        loadData();
+      }
+
+      function clearDateRange() {
+        document.getElementById('startDate').value = '';
+        document.getElementById('endDate').value = '';
+        loadData();
+      }
+
+      async function handleYearChange() {
+        // When year dropdown is changed, clear date pickers
+        document.getElementById('startDate').value = '';
+        document.getElementById('endDate').value = '';
+        await loadData();
       }
 
       function updateMonthDropdownText() {
@@ -1823,11 +1863,32 @@
         }
       };
 
-      // --- Data Loading ---
       async function loadData() {
-        const year = document.getElementById("yearSelect").value;
-        document.getElementById("displayYear").innerText = year;
-        const filePath = `data/${year}/Day-wise_ Rainfall.csv`;
+        const yearFromSelect = document.getElementById("yearSelect").value;
+        const startDateVal = document.getElementById('startDate').value;
+        const endDateVal = document.getElementById('endDate').value;
+
+        let yearsToLoad = new Set();
+        let displayYearText = yearFromSelect;
+
+        // If a date range is provided, it takes precedence
+        if (startDateVal) {
+            const startYear = new Date(startDateVal).getFullYear();
+            yearsToLoad.add(startYear);
+            let endYear = startYear;
+            if (endDateVal) {
+                endYear = new Date(endDateVal).getFullYear();
+                for (let y = startYear; y <= endYear; y++) {
+                    yearsToLoad.add(y);
+                }
+            }
+            displayYearText = startYear === endYear ? String(startYear) : `${startYear} - ${endYear}`;
+        } else {
+            // Otherwise, use the year dropdown
+            yearsToLoad.add(parseInt(yearFromSelect));
+        }
+        
+        document.getElementById("displayYear").innerText = displayYearText;
 
         const loading = document.getElementById("loadingMessage");
         const errorMsg = document.getElementById("errorMessage");
@@ -1838,25 +1899,40 @@
         chartDiv.classList.add("opacity-50");
 
         try {
-          const response = await fetch(filePath);
-          if (!response.ok) throw new Error("File not found");
-          const csvText = await response.text();
+            const promises = Array.from(yearsToLoad).map(year => {
+                const filePath = `data/${year}/Day-wise_ Rainfall.csv`;
+                return fetch(filePath)
+                    .then(response => {
+                        if (!response.ok) return Promise.resolve([]); // Resolve with empty array if file not found
+                        return response.text().then(csvText => parseCustomCSV(csvText));
+                    })
+                    .catch(err => {
+                        console.error(`Failed to load data for year ${year}:`, err);
+                        return []; // Return empty on network error etc.
+                    });
+            });
 
-          rawData = parseCustomCSV(csvText);
+            const results = await Promise.all(promises);
+            
+            rawData = [].concat(...results);
 
-          availableDistricts = [
-            ...new Set(rawData.map((d) => d.district)),
-          ].sort();
-          if (availableDistricts.length > 0)
-            selectedDistricts = [...availableDistricts];
+            if (rawData.length === 0 && yearsToLoad.size > 0) {
+                throw new Error("File not found for the selected year(s).");
+            }
+
+          const newDistricts = [...new Set(rawData.map((d) => d.district))].sort();
+          availableDistricts = newDistricts;
+          selectedDistricts = selectedDistricts.filter(d => availableDistricts.includes(d));
+          if (selectedDistricts.length === 0 && availableDistricts.length > 0) {
+              selectedDistricts = [...availableDistricts];
+          }
           generateDistrictCheckboxes();
 
           processAndRender();
         } catch (error) {
-          console.error(error);
           errorMsg.innerText =
             currentLanguage === "en"
-              ? "Data file not found."
+              ? error.message
               : "डेटा फ़ाइल नहीं मिली।";
           errorMsg.classList.remove("hidden");
           rawData = [];
@@ -2053,25 +2129,36 @@
           selectedDistricts.includes(d.district),
         );
 
-        // Filter by Month
-        const monthNames = [
-          "January",
-          "February",
-          "March",
-          "April",
-          "May",
-          "June",
-          "July",
-          "August",
-          "September",
-          "October",
-          "November",
-          "December",
-        ];
-        filtered = filtered.filter((d) => {
-          const mName = monthNames[d.dateObj.month - 1];
-          return selectedMonths.includes(mName);
-        });
+        // Filter by Date Range OR Month
+        const startDateVal = document.getElementById('startDate').value;
+        const endDateVal = document.getElementById('endDate').value;
+
+        if (startDateVal) {
+            const [sY, sM, sD] = startDateVal.split('-').map(Number);
+            const start = new Date(sY, sM - 1, sD);
+            let end;
+            if (endDateVal) {
+                const [eY, eM, eD] = endDateVal.split('-').map(Number);
+                end = new Date(eY, eM - 1, eD);
+            } else {
+                end = new Date(sY, sM - 1, sD);
+            }
+            
+            filtered = filtered.filter(d => {
+                const dDate = new Date(d.dateObj.year, d.dateObj.month - 1, d.dateObj.day);
+                return dDate >= start && dDate <= end;
+            });
+        } else {
+            // Filter by Month
+            const monthNames = [
+              "January", "February", "March", "April", "May", "June",
+              "July", "August", "September", "October", "November", "December"
+            ];
+            filtered = filtered.filter((d) => {
+              const mName = monthNames[d.dateObj.month - 1];
+              return selectedMonths.includes(mName);
+            });
+        }
 
         // Update Special Checkbox State based on individual selections
         const specialCb = document.getElementById("specialHeavyRain");
