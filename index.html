@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>बिहार मानसून डैशबोर्ड 2025</title>
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>बिहार मानसून डैशबोर्ड</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -745,6 +751,39 @@
         flex-wrap: wrap;
         max-width: 120px;
       }
+
+      /* --- Glowing Button Effect for Main Website --- */
+      .glow-btn {
+        position: relative;
+        transition: all 0.3s ease;
+      }
+      .glow-btn:hover {
+        box-shadow:
+          0 0 15px rgba(37, 99, 235, 0.6),
+          0 0 25px rgba(13, 148, 136, 0.4);
+        transform: translateY(-2px);
+      }
+      .glow-btn::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(
+          to right,
+          transparent,
+          rgba(255, 255, 255, 0.6),
+          transparent
+        );
+        transform: skewX(-25deg);
+        z-index: 10;
+        transition: none;
+      }
+      .glow-btn:hover::after {
+        left: 200%;
+        transition: 0.6s ease-in-out;
+      }
     </style>
   </head>
   <body
@@ -794,6 +833,23 @@
       <div class="max-w-7xl mx-auto px-4 py-2 flex flex-col gap-2">
         <!-- Top Row: Branding & Controls -->
         <div class="flex flex-wrap items-center justify-between w-full gap-4">
+          <!-- Main Website Link (Moved to Top Left) -->
+          <a
+            href="https://biharmausam.com/"
+            class="glow-btn relative inline-flex items-center justify-center p-0.5 overflow-hidden text-sm font-medium text-gray-900 rounded-lg group bg-gradient-to-br from-purple-600 to-blue-500 group-hover:from-purple-600 group-hover:to-blue-500 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 shadow-md transition-all duration-300"
+            title="Go to Bihar Mausam Main Page"
+          >
+            <span
+              class="relative px-3 py-1.5 transition-all ease-in-out duration-75 bg-white dark:bg-gray-900 rounded-md group-hover:bg-opacity-0 flex items-center gap-2"
+            >
+              <i
+                class="fa-solid fa-house-chimney text-blue-600 dark:text-blue-400 group-hover:text-white"
+              ></i>
+              <span class="lang-hi font-bold">मुख्य वेबसाइट</span>
+              <span class="lang-en font-bold">Main Website</span>
+            </span>
+          </a>
+
           <div class="flex items-center gap-3 nav-logo shrink-0">
             <img
               src="assets/logo.png"

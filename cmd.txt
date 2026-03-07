@@ -2,8 +2,15 @@ git status
 
 git add .
 
-git status
+git commit -m "Added new features and updated readme"
 
-git commit -m "Fixed Hindi title bug and overall tab translation"
+git push origin main
+
+
+
+
+git add .
+
+git commit -m "New changes"
 
 git push origin main

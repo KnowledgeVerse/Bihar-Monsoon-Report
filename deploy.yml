@@ -19,7 +19,8 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/ # Hostinger पर आपकी साइट का फोल्डर
+          port: 21 # Hostinger FTP Port
+          server-dir: /public_html/hydromet/fmo/Bihar_Monsoon_Report/ # Hostinger पर आपकी साइट का फोल्डर
           exclude: |
             **/.git*
             **/.git*/**
