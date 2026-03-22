@@ -25,6 +25,13 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+    <!-- shp.js for parsing shapefiles -->
+    <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+    <!-- Proj4js for Coordinate Reprojection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    <!-- html2canvas and jsPDF for Exporting Map -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
     <script>
@@ -208,6 +215,51 @@
         color: white;
         border-color: transparent;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+
+      /* --- District Label --- */
+      .district-name-label {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        font-weight: 700;
+        font-size: 11px;
+        color: #000;
+        text-shadow:
+          1px 1px 0px #fff,
+          -1px -1px 0px #fff,
+          1px -1px 0px #fff,
+          -1px 1px 0px #fff;
+        text-align: center;
+        pointer-events: none;
+        line-height: 1.15;
+        white-space: nowrap;
+      }
+
+      /* Custom Map Tooltip styling */
+      .leaflet-tooltip.custom-map-tooltip {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        color: #1f2937;
+      }
+      .dark .leaflet-tooltip.custom-map-tooltip {
+        background-color: rgba(31, 41, 55, 0.95) !important;
+        border: 1px solid #4b5563 !important;
+        color: #f3f4f6 !important;
+      }
+
+      /* Map Controls Offsets to prevent overlap with IMD Overlays */
+      .leaflet-top.leaflet-left {
+        top: 130px !important;
+      }
+      .leaflet-top.leaflet-right {
+        top: 160px !important;
+      }
+      /* Hide default attribution to keep it clean like a standard report map */
+      .leaflet-control-attribution {
+        display: none !important;
       }
 
       /* Language Switcher Styles */
@@ -1154,8 +1206,165 @@
 
       <div
         id="mapContainer"
-        class="card p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg min-h-[600px] flex items-center justify-center border border-gray-100 dark:border-gray-700 relative overflow-hidden group"
+        class="card p-0 bg-[#f8f9fa] dark:bg-gray-800 rounded-xl shadow-lg h-[90vh] min-h-[650px] border border-gray-200 dark:border-gray-700 relative overflow-hidden group"
       >
+        <!-- 3. TOP LEFT LOGO -->
+        <div
+          class="absolute top-4 left-4 z-[1000] bg-white/90 p-1.5 rounded-lg border border-gray-300 shadow-sm backdrop-blur"
+        >
+          <img
+            src="assets/logo.png"
+            alt="IMD Logo"
+            class="w-12 sm:w-16 h-auto object-contain drop-shadow"
+          />
+        </div>
+
+        <!-- 2. & 7. TOP HEADER & DATE BOX -->
+        <div
+          class="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-[75%] sm:w-auto flex flex-col items-center gap-1.5 pointer-events-none"
+        >
+          <div
+            class="bg-white/95 dark:bg-gray-800/95 border-2 border-gray-800 dark:border-gray-500 py-1.5 px-3 sm:px-6 shadow-md rounded text-center pointer-events-auto"
+          >
+            <h3
+              class="text-xs sm:text-lg font-bold text-gray-900 dark:text-gray-100 m-0 leading-tight"
+            >
+              <span class="lang-hi"
+                >जिलावार मानसून ऋतु का सामान्य वर्षा, वास्तविक वर्षा और प्रस्थान
+                (%)</span
+              >
+              <span class="lang-en hidden"
+                >District-wise Monsoon Normal Rainfall, Actual Rainfall and
+                Departure (%)</span
+              >
+            </h3>
+          </div>
+          <div
+            class="bg-[#ffeb3b]/95 dark:bg-yellow-600/90 border border-gray-800 dark:border-gray-500 px-3 py-1 shadow-sm text-center rounded text-[10px] sm:text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap pointer-events-auto"
+          >
+            <span class="lang-hi">समयावधि : </span>
+            <span class="lang-en hidden">Period : </span>
+            <span id="mapDateRange">01.06.2025 - 30.09.2025</span>
+          </div>
+        </div>
+
+        <!-- 4. TOP RIGHT LOGOS -->
+        <div
+          class="absolute top-4 right-4 z-[1000] flex flex-col items-center gap-2 pointer-events-none"
+        >
+          <div
+            class="bg-white/90 p-1.5 rounded-lg border border-gray-300 shadow-sm backdrop-blur pointer-events-auto"
+          >
+            <img
+              src="assets/IMD_150_Year_Logo.png"
+              alt="150 Year Logo"
+              class="w-14 sm:w-20 h-auto object-contain drop-shadow"
+            />
+          </div>
+          <div
+            class="bg-white/90 p-1 rounded-lg border border-gray-300 shadow-sm backdrop-blur pointer-events-auto mt-2"
+          >
+            <img
+              src="assets/North_Arrow.png"
+              alt="North Arrow"
+              class="w-8 sm:w-10 h-auto object-contain drop-shadow"
+            />
+          </div>
+        </div>
+
+        <!-- 5. LEGEND (BOTTOM RIGHT) -->
+        <div
+          class="absolute bottom-8 right-4 z-[1000] bg-white/95 dark:bg-gray-800/95 border border-gray-400 p-2 sm:p-3 rounded shadow-md text-[9px] sm:text-xs font-semibold text-gray-800 dark:text-gray-200 min-w-[150px] sm:min-w-[180px]"
+        >
+          <div
+            class="font-bold mb-1.5 border-b border-gray-300 dark:border-gray-600 pb-1 text-center"
+          >
+            <span class="lang-hi">वर्षा श्रेणी (Rainfall Category)</span>
+            <span class="lang-en hidden">Rainfall Category</span>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#0000FF]"
+              ></span>
+              <span>Large Excess (+60% or more)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#00BFFF]"
+              ></span>
+              <span>Excess (+20% to +59%)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#008000]"
+              ></span>
+              <span>Normal (-19% to +19%)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#FF0000]"
+              ></span>
+              <span>Deficient (-20% to -59%)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#FFFF00]"
+              ></span>
+              <span>Large Deficient (-60% to -99%)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#FFFFFF]"
+              ></span>
+              <span>No Rain (-100%)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="w-3 h-3 sm:w-4 sm:h-4 inline-block border border-gray-500 bg-[#808080]"
+              ></span>
+              <span>No Data</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. FOOTER (BOTTOM CENTER) -->
+        <div
+          class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 dark:bg-gray-800/95 border border-gray-400 px-3 py-1.5 rounded shadow text-[9px] sm:text-xs font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap text-center"
+        >
+          <span class="lang-hi"
+            >मानचित्र गाइड : जिला का नाम, वास्तविक वर्षा (सामान्य वर्षा) और
+            प्रस्थान (%)</span
+          >
+          <span class="lang-en hidden"
+            >Map Guide : District Name, Actual Rainfall (Normal Rainfall) &
+            Departure (%)</span
+          >
+        </div>
+
+        <!-- Download Buttons (Moved up slightly so it clears the map elements) -->
+        <div
+          id="downloadBtns"
+          class="absolute bottom-16 left-4 z-[1000] flex flex-col sm:flex-row gap-2"
+        >
+          <button
+            onclick="downloadMap('png')"
+            class="bg-white/90 dark:bg-gray-800/90 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-2 rounded shadow border border-gray-300 dark:border-gray-600 text-sm font-bold backdrop-blur transition-all"
+            title="Download as Image"
+          >
+            <i class="fa-solid fa-image text-blue-600 dark:text-blue-400"></i>
+            Image
+          </button>
+          <button
+            onclick="downloadMap('pdf')"
+            class="bg-white/90 dark:bg-gray-800/90 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-2 rounded shadow border border-gray-300 dark:border-gray-600 text-sm font-bold backdrop-blur transition-all"
+            title="Download as PDF"
+          >
+            <i class="fa-solid fa-file-pdf text-red-600 dark:text-red-400"></i>
+            PDF
+          </button>
+        </div>
+
         <!-- Loading Spinner -->
         <div
           id="mapLoader"
@@ -1170,20 +1379,7 @@
         </div>
 
         <!-- Map Div -->
-        <div id="map" class="w-full h-[600px] rounded-lg z-0"></div>
-
-        <div
-          class="absolute bottom-6 right-6 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-4 py-2 rounded-lg shadow text-sm font-bold border border-gray-200 dark:border-gray-600 z-[400]"
-        >
-          <div class="lang-hi">
-            <span id="labelYear">2025</span> -
-            <span id="labelMonth" class="text-blue-600">Overall</span>
-          </div>
-          <div class="lang-en">
-            <span id="labelYear">2025</span> -
-            <span id="labelMonth" class="text-blue-600">Total</span>
-          </div>
-        </div>
+        <div id="map" class="w-full h-full rounded-lg z-0"></div>
       </div>
 
       <footer
@@ -1211,9 +1407,52 @@
 
     <script>
       // --- Configuration ---
-      const GEOJSON_PATH = "assets/bihar_districts.geojson";
+      const GEOJSON_PATH = "Bihar_Map/bihar_districts.geojson";
       // Optional: Path to district names CSV if needed for mapping, though usually shapefile properties suffice
       const DISTRICT_NAMES_CSV = "Bihar_Map/Bihar District Name.csv";
+
+      const districtTranslations = {
+        ARARIA: "अररिया",
+        ARWAL: "अरवल",
+        AURANGABAD: "औरंगाबाद",
+        BANKA: "बांका",
+        BEGUSARAI: "बेगूसराय",
+        BHAGALPUR: "भागलपुर",
+        BHOJPUR: "भोजपुर",
+        BUXAR: "बक्सर",
+        DARBHANGA: "दरभंगा",
+        "EAST CHAMPARAN": "पूर्वी चंपारण",
+        GAYA: "गया",
+        GOPALGANJ: "गोपालगंज",
+        JAMUI: "जमुई",
+        JEHANABAD: "जहानाबाद",
+        "KAIMUR (BHABUA)": "कैमूर (भभुआ)",
+        KAIMUR: "कैमूर",
+        KATIHAR: "कटिहार",
+        KHAGARIA: "खगड़िया",
+        KISHANGANJ: "किशनगंज",
+        LAKHISARAI: "लखीसराय",
+        MADHEPURA: "मधेपुरा",
+        MADHUBANI: "मधुबनी",
+        MUNGER: "मुंगेर",
+        MUZAFFARPUR: "मुजफ्फरपुर",
+        NALANDA: "नालंदा",
+        NAWADA: "नवादा",
+        PATNA: "पटना",
+        PURNEA: "पूर्णिया",
+        PURNIA: "पूर्णिया",
+        ROHTAS: "रोहतास",
+        SAHARSA: "सहरसा",
+        SAMASTIPUR: "समस्तीपुर",
+        SARAN: "सारण",
+        SHEIKHPURA: "शेखपुरा",
+        SHEOHAR: "शिवहर",
+        SITAMARHI: "सीतामढ़ी",
+        SIWAN: "सीवान",
+        SUPAUL: "सुपौल",
+        VAISHALI: "वैशाली",
+        "WEST CHAMPARAN": "पश्चिमी चंपारण",
+      };
 
       let currentYear = "2025";
       let currentMonth = "Overall";
@@ -1236,6 +1475,10 @@
         }
 
         updateLanguageContent();
+
+        if (currentGeoData) {
+          renderGeoJSON(currentGeoData);
+        }
       }
 
       function updateLanguageContent() {
@@ -1293,10 +1536,69 @@
         }
       }
 
+      // --- Dynamic Date Range Generator ---
+      function updateMapDateRange() {
+        const year = currentYear;
+        let dateStr = "";
+        if (currentMonth === "Overall") {
+          dateStr = `01.06.${year} - 30.09.${year}`;
+        } else if (currentMonth === "June") {
+          dateStr = `01.06.${year} - 30.06.${year}`;
+        } else if (currentMonth === "July") {
+          dateStr = `01.07.${year} - 31.07.${year}`;
+        } else if (currentMonth === "August") {
+          dateStr = `01.08.${year} - 31.08.${year}`;
+        } else if (currentMonth === "September") {
+          dateStr = `01.09.${year} - 30.09.${year}`;
+        }
+        const label = document.getElementById("mapDateRange");
+        if (label) label.innerText = dateStr;
+      }
+
       // --- Map Logic ---
       let map;
       let geojsonLayer;
       let districtData = {};
+      let currentGeoData = null;
+      let labelsLayer;
+
+      // Function to reproject coordinates from EPSG:32645 (Meters) to EPSG:4326 (Lat/Lon)
+      function ensureWGS84(data) {
+        if (!data || !data.features) return data;
+
+        if (typeof proj4 !== "undefined") {
+          proj4.defs(
+            "EPSG:32645",
+            "+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs",
+          );
+        }
+
+        data.features.forEach((feature) => {
+          if (!feature.geometry || !feature.geometry.coordinates) return;
+          let firstCoord = feature.geometry.coordinates;
+          while (firstCoord && Array.isArray(firstCoord[0])) {
+            firstCoord = firstCoord[0];
+          }
+
+          // If coordinate values are in meters (e.g. > 180), convert them
+          if (
+            firstCoord &&
+            (Math.abs(firstCoord[0]) > 180 || Math.abs(firstCoord[1]) > 90)
+          ) {
+            const transformCoords = (coords) => {
+              if (typeof coords[0] === "number") {
+                return proj4("EPSG:32645", "EPSG:4326", [coords[0], coords[1]]);
+              } else {
+                return coords.map(transformCoords);
+              }
+            };
+            feature.geometry.coordinates = transformCoords(
+              feature.geometry.coordinates,
+            );
+          }
+        });
+        return data;
+      }
 
       function initMap() {
         // Check if Leaflet is loaded
@@ -1308,18 +1610,77 @@
         }
 
         // Initialize Leaflet Map
-        map = L.map("map").setView([25.6, 85.6], 7); // Centered on Bihar
+        map = L.map("map", {
+          zoomControl: false, // Disable default zoom to position it manually
+        }).setView([25.6, 85.6], 7); // Centered on Bihar
 
-        // Add a base tile layer
-        L.tileLayer(
+        // Add Zoom Control to Top Left
+        L.control.zoom({ position: "topleft" }).addTo(map);
+
+        // --- Define Base Maps ---
+        const solidClear = L.layerGroup(); // Empty/Solid background
+        const streetMap = L.tileLayer(
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          { attribution: "&copy; OpenStreetMap" },
+        );
+        const googleSat = L.tileLayer(
+          "http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+          { maxZoom: 20, subdomains: ["mt0", "mt1", "mt2", "mt3"] },
+        );
+        const googleHybrid = L.tileLayer(
+          "http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}",
+          { maxZoom: 20, subdomains: ["mt0", "mt1", "mt2", "mt3"] },
+        );
+        const lightTheme = L.tileLayer(
           "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
           {
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            attribution: "&copy; CARTO",
             subdomains: "abcd",
             maxZoom: 19,
           },
-        ).addTo(map);
+        );
+        const openTopoMap = L.tileLayer(
+          "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+          { attribution: "&copy; OpenTopoMap" },
+        );
+        const googleTerrain = L.tileLayer(
+          "http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+          { maxZoom: 20, subdomains: ["mt0", "mt1", "mt2", "mt3"] },
+        );
+
+        // Custom Lat/Lng Grid Layer
+        const GridLayer = L.GridLayer.extend({
+          createTile: function (coords) {
+            var tile = document.createElement("div");
+            tile.style.outline = "1px solid rgba(128, 128, 128, 0.3)";
+            tile.style.display = "flex";
+            tile.style.justifyContent = "center";
+            tile.style.alignItems = "center";
+            tile.style.fontSize = "10px";
+            tile.style.color = "rgba(128,128,128,0.7)";
+            tile.innerHTML = `x:${coords.x} y:${coords.y} z:${coords.z}`;
+            return tile;
+          },
+        });
+        const latLngGrid = new GridLayer();
+
+        // Combine into a Layer Control Object
+        const baseMaps = {
+          "Light Theme": lightTheme,
+          "Solid / Clear": solidClear,
+          Street: streetMap,
+          Satellite: googleSat,
+          Hybrid: googleHybrid,
+          OpenTopoMap: openTopoMap,
+          "Google Terrain": googleTerrain,
+          "Lat/Lng Grid": latLngGrid,
+        };
+
+        // Add default map layer
+        lightTheme.addTo(map);
+
+        // Add the Layer Control to Top Right
+        L.control.layers(baseMaps, null, { position: "topright" }).addTo(map);
 
         // Load GeoJSON and Data
         loadMapData();
@@ -1330,17 +1691,75 @@
         loader.classList.remove("hidden");
 
         try {
-          // 1. Fetch GeoJSON
-          const geoRes = await fetch(GEOJSON_PATH);
-          if (!geoRes.ok)
-            throw new Error(`GeoJSON not found at ${GEOJSON_PATH}`);
-          const geoData = await geoRes.json();
+          if (!currentGeoData) {
+            let geoData = null;
+
+            const geojsonPaths = [GEOJSON_PATH];
+
+            for (const path of geojsonPaths) {
+              try {
+                const geoRes = await fetch(path);
+                if (geoRes.ok) {
+                  const text = await geoRes.text();
+                  const parsed = JSON.parse(text);
+                  if (parsed && parsed.type === "FeatureCollection") {
+                    geoData = parsed;
+                    console.log("Loaded GeoJSON from", path);
+                    break;
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (!geoData) {
+              console.log("GeoJSON not found, falling back to Shapefiles...");
+              const candidates = [
+                "Bihar_Map/Bihar_Districts_Shapefile/Bihar",
+                "data/Bihar_Districts_Shapefile/Bihar",
+                "Bihar_Districts_Shapefile/Bihar",
+              ];
+
+              for (const base of candidates) {
+                try {
+                  const [shpRes, dbfRes] = await Promise.all([
+                    fetch(base + ".shp").catch(() => null),
+                    fetch(base + ".dbf").catch(() => null),
+                  ]);
+
+                  if (shpRes && shpRes.ok && dbfRes && dbfRes.ok) {
+                    const shpBuffer = await shpRes.arrayBuffer();
+                    const dbfBuffer = await dbfRes.arrayBuffer();
+                    let prjStr = null;
+                    try {
+                      const prjRes = await fetch(base + ".prj");
+                      if (prjRes.ok) prjStr = await prjRes.text();
+                    } catch (e) {}
+
+                    geoData = shp.combine([
+                      shp.parseShp(shpBuffer, prjStr || undefined),
+                      shp.parseDbf(dbfBuffer),
+                    ]);
+                    console.log("Loaded Shapefile from", base);
+                    break;
+                  }
+                } catch (e) {}
+              }
+            }
+
+            if (!geoData) {
+              throw new Error(
+                "Shapefile (.shp और .dbf) या GeoJSON फाइल नहीं मिली। कृपया सुनिश्चित करें कि मैप डेटा फोल्डर में मौजूद है।",
+              );
+            }
+            // Reproject to latitude/longitude before storing
+            currentGeoData = ensureWGS84(geoData);
+          }
 
           // 2. Fetch CSV Data
           await fetchCSVData();
 
           // 3. Render Map Layer
-          renderGeoJSON(geoData);
+          renderGeoJSON(currentGeoData);
 
           // Hide loader on success
           loader.classList.add("hidden");
@@ -1348,6 +1767,29 @@
           console.error("Error loading map data:", error);
           loader.innerHTML = `<div class="text-center text-red-500"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>Map Data Error<br><span class="text-xs text-gray-500">${error.message}</span></div>`;
         }
+      }
+
+      function normalizeDistrictName(name) {
+        if (!name) return "";
+        let n = name.trim().toUpperCase().replace(/_/g, " ");
+        if (
+          n === "PURBI CHAMPARAN" ||
+          n === "PURBA CHAMPARAN" ||
+          n === "PURVI CHAMPARAN"
+        )
+          n = "EAST CHAMPARAN";
+        if (
+          n === "PASHCHIM CHAMPARAN" ||
+          n === "PASHCHIMI CHAMPARAN" ||
+          n === "PASCHIM CHAMPARAN" ||
+          n === "PASCHIMI CHAMPARAN"
+        )
+          n = "WEST CHAMPARAN";
+        if (n === "KAIMUR (BHABUA)" || n === "BHABUA") n = "KAIMUR";
+        if (n === "JAHANABAD") n = "JEHANABAD";
+        if (n === "MONGHYR") n = "MUNGER";
+        if (n === "PURNIA") n = "PURNEA";
+        return n;
       }
 
       async function fetchCSVData() {
@@ -1381,9 +1823,7 @@
 
           parsed.data.forEach((row) => {
             // Normalize district name for matching (uppercase)
-            const distName = row["DISTRICT NAME"]
-              ? row["DISTRICT NAME"].trim().toUpperCase()
-              : "";
+            const distName = normalizeDistrictName(row["DISTRICT NAME"]);
             if (distName) {
               districtData[distName] = {
                 actual: parseFloat(row["Actual R/F (mm)"]) || 0,
@@ -1402,20 +1842,64 @@
         if (geojsonLayer) {
           map.removeLayer(geojsonLayer);
         }
+        if (labelsLayer) {
+          map.removeLayer(labelsLayer);
+        }
+        labelsLayer = L.layerGroup().addTo(map);
 
         geojsonLayer = L.geoJSON(geoData, {
           style: styleFeature,
           onEachFeature: onEachFeature,
         }).addTo(map);
+
+        // Add permanent district labels and Auto-fit map
+        geojsonLayer.eachLayer((layer) => {
+          const props = layer.feature.properties || {};
+          const rawName =
+            props.D_NAME || props.District || props.dtname || "Unknown";
+          const distName = normalizeDistrictName(rawName);
+          const displayDistName =
+            currentLanguage === "en"
+              ? distName
+              : districtTranslations[distName] || rawName;
+
+          const data = districtData[distName];
+          let labelHtml = `<div style="font-size: 11px;">${displayDistName}</div>`;
+          if (data && data.actual !== undefined) {
+            const depSign = data.departure > 0 ? "+" : "";
+            labelHtml += `<div style="font-size: 9px; font-weight: 700; margin-top: 2px;">${data.actual} (${data.normal})</div>`;
+            labelHtml += `<div style="font-size: 10px; font-weight: 800;">${depSign}${data.departure}%</div>`;
+          }
+
+          if (layer.getBounds) {
+            const center = layer.getBounds().getCenter();
+            const labelMarker = L.marker(center, {
+              icon: L.divIcon({
+                className: "district-name-label",
+                html: labelHtml,
+                iconSize: [120, 50],
+                iconAnchor: [60, 25],
+              }),
+              interactive: false, // Allows clicking/hovering the polygon beneath the text
+            });
+            labelsLayer.addLayer(labelMarker);
+          }
+        });
+
+        setTimeout(() => {
+          map.invalidateSize();
+          map.fitBounds(geojsonLayer.getBounds(), {
+            paddingTopLeft: [50, 120], // Space for Header and Logo
+            paddingBottomRight: [200, 80], // Space for Legend and Footer
+          });
+        }, 400);
       }
 
       function styleFeature(feature) {
         // Using D_NAME from shapefile properties (based on your XML metadata)
-        const distName = (
-          feature.properties.D_NAME ||
-          feature.properties.District ||
-          ""
-        ).toUpperCase();
+        const props = feature.properties || {};
+        const rawName = props.D_NAME || props.District || props.dtname || "";
+        const distName = normalizeDistrictName(rawName);
         const data = districtData[distName];
         const departure = data ? data.departure : null;
 
@@ -1430,7 +1914,7 @@
       }
 
       function getColor(d) {
-        if (d === null || isNaN(d)) return "#808080"; // Grey for no data
+        if (d === null || isNaN(d) || d === undefined) return "#808080"; // Grey for no data
         if (d >= 60) return "#0000FF"; // Large Excess (Blue)
         if (d >= 20) return "#00BFFF"; // Excess (Light Blue)
         if (d >= -19) return "#008000"; // Normal (Green)
@@ -1440,24 +1924,49 @@
       }
 
       function onEachFeature(feature, layer) {
-        const distName =
-          feature.properties.D_NAME || feature.properties.District || "Unknown";
-        const data = districtData[distName.toUpperCase()];
+        const props = feature.properties || {};
+        const rawName =
+          props.D_NAME || props.District || props.dtname || "Unknown";
+        const distName = normalizeDistrictName(rawName);
+        const data = districtData[distName];
+        const displayDistName =
+          currentLanguage === "en"
+            ? distName
+            : districtTranslations[distName] || rawName;
 
-        if (data) {
-          // Requested Format:
-          // District Name
-          // वास्तविक वर्षा (सामान्य वर्षा)
-          // विचलन
-          const tooltipContent = `
-                  <div class="text-center">
-                      <strong class="text-lg">${distName}</strong><br>
-                      वास्तविक वर्षा: ${data.actual} (सामान्य वर्षा: ${data.normal})<br>
-                      विचलन: ${data.departure}%
-                  </div>
-              `;
-          layer.bindTooltip(tooltipContent, { sticky: true, direction: "top" });
+        let tooltipContent = `<div class="text-center p-1"><strong class="text-lg text-blue-600 dark:text-blue-400">${displayDistName}</strong><br>`;
+        if (data && data.actual !== undefined) {
+          tooltipContent += `<div class="mt-1 font-medium">${currentLanguage === "en" ? "Actual R/F" : "वास्तविक वर्षा"}: <span class="text-gray-800 dark:text-gray-200">${data.actual} mm</span><br>
+                  <span class="text-sm text-gray-500">(${currentLanguage === "en" ? "Normal" : "सामान्य"}: ${data.normal} mm)</span></div>
+                  <div class="mt-1 font-bold ${data.departure >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}">${currentLanguage === "en" ? "Departure" : "विचलन"}: ${data.departure > 0 ? "+" : ""}${data.departure}%</div>`;
+        } else {
+          tooltipContent += `<span class="text-gray-500 mt-2 block">${currentLanguage === "en" ? "No Data Available" : "डेटा उपलब्ध नहीं"}</span>`;
         }
+        tooltipContent += `</div>`;
+
+        layer.bindTooltip(tooltipContent, {
+          sticky: true,
+          direction: "top",
+          className: "custom-map-tooltip",
+        });
+
+        layer.on({
+          mouseover: function (e) {
+            var l = e.target;
+            l.setStyle({
+              weight: 3,
+              color: "#2563eb",
+              dashArray: "",
+              fillOpacity: 0.8,
+            });
+            if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+              l.bringToFront();
+            }
+          },
+          mouseout: function (e) {
+            geojsonLayer.resetStyle(e.target);
+          },
+        });
       }
 
       function selectMonth(month) {
@@ -1470,21 +1979,71 @@
       async function updateMap() {
         const yearSelect = document.getElementById("mapYear");
         currentYear = yearSelect.value;
-        document.getElementById("labelYear").innerText = currentYear;
+
+        updateMapDateRange();
+
+        const loader = document.getElementById("mapLoader");
+        loader.classList.remove("hidden");
+        loader.innerHTML =
+          '<i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600 mb-3"></i><span class="text-gray-600 dark:text-gray-300 font-semibold">Updating Data...</span>';
 
         // Reload CSV data and refresh map style
         await fetchCSVData();
 
-        if (geojsonLayer) {
-          geojsonLayer.eachLayer((layer) => {
-            // Re-apply style
-            layer.setStyle(styleFeature(layer.feature));
-            // Re-bind tooltip
-            onEachFeature(layer.feature, layer);
-          });
+        if (currentGeoData) {
+          renderGeoJSON(currentGeoData);
+          loader.classList.add("hidden");
         } else {
-          // If layer doesn't exist yet (e.g. first load failed), try loading everything
           loadMapData();
+        }
+      }
+
+      // --- Export Map Logic (PNG/PDF) ---
+      async function downloadMap(format) {
+        const mapEl = document.getElementById("mapContainer");
+        const downloadBtns = document.getElementById("downloadBtns");
+        const loader = document.getElementById("mapLoader");
+
+        // Hide buttons during capture
+        if (downloadBtns) downloadBtns.style.display = "none";
+        if (loader) {
+          loader.innerHTML =
+            '<i class="fa-solid fa-camera fa-beat text-4xl text-blue-600 mb-3"></i><span class="text-gray-600 dark:text-gray-300 font-semibold">Capturing Map...</span>';
+          loader.classList.remove("hidden");
+        }
+
+        try {
+          const canvas = await html2canvas(mapEl, {
+            useCORS: true,
+            scale: 2, // High resolution
+          });
+
+          if (format === "png") {
+            const link = document.createElement("a");
+            link.download = `Bihar_Rainfall_Map_${currentYear}_${currentMonth}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+          } else if (format === "pdf") {
+            const { jsPDF } = window.jspdf;
+            const imgWidth = 297; // A4 Landscape width
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const doc = new jsPDF("l", "mm", "a4");
+            let y = (210 - imgHeight) / 2; // Center vertically
+            doc.addImage(
+              canvas.toDataURL("image/png"),
+              "PNG",
+              0,
+              y > 0 ? y : 0,
+              imgWidth,
+              imgHeight,
+            );
+            doc.save(`Bihar_Rainfall_Map_${currentYear}_${currentMonth}.pdf`);
+          }
+        } catch (err) {
+          console.error("Capture Error:", err);
+        } finally {
+          if (downloadBtns) downloadBtns.style.display = "flex";
+          if (loader) loader.classList.add("hidden");
         }
       }
 
@@ -1552,6 +2111,7 @@
 
         // Initialize with proper language display
         updateLanguageContent();
+        updateMapDateRange();
         initMap();
 
         // Initialize Dark Mode Checkbox
