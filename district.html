@@ -277,6 +277,106 @@
         background-color: #374151;
       }
 
+      /* --- Hover-based Toolbar Styles --- */
+      .chart-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .plotly-toolbar {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 8px;
+        padding: 6px 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        z-index: 100;
+        display: none;
+        gap: 4px;
+        align-items: center;
+        transition: all 0.2s ease;
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      .chart-container:hover .plotly-toolbar {
+        display: flex !important;
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .dark .plotly-toolbar {
+        background: rgba(30, 41, 59, 0.95);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .toolbar-btn {
+        background: transparent;
+        border: none;
+        padding: 6px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: #4b5563;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 28px;
+      }
+
+      .dark .toolbar-btn {
+        color: #d1d5db;
+      }
+
+      .toolbar-btn:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563eb;
+        transform: translateY(-1px);
+      }
+
+      .dark .toolbar-btn:hover {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+      }
+
+      .toolbar-btn:active {
+        transform: translateY(0);
+      }
+
+      /* Mobile adjustments for toolbar */
+      @media (max-width: 767px) {
+        .plotly-toolbar {
+          top: 10px;
+          right: 10px;
+          padding: 4px 6px;
+          gap: 3px;
+        }
+
+        .toolbar-btn {
+          min-width: 24px;
+          height: 24px;
+          padding: 4px 6px;
+          font-size: 11px;
+        }
+      }
+
+      /* Compact toolbar for better mobile experience */
+      .toolbar-compact {
+        flex-wrap: wrap;
+        max-width: 120px;
+      }
+
+      @media (max-width: 767px) {
+        .toolbar-compact {
+          max-width: 100px;
+        }
+      }
+
       /* Graph container styling */
       .graph-container {
         background: white;
@@ -1344,7 +1444,53 @@
           </div>
         </div>
 
-        <div id="districtGraph" class="w-full h-[500px]"></div>
+        <div class="chart-container">
+          <div class="plotly-toolbar toolbar-compact">
+            <button
+              class="toolbar-btn"
+              onclick="downloadChart('districtGraph', 'district_rainfall.png')"
+              title="Download"
+            >
+              <i class="fa-solid fa-download"></i>
+            </button>
+            <button
+              class="toolbar-btn"
+              onclick="resetZoom('districtGraph')"
+              title="Reset Zoom"
+            >
+              <i class="fa-solid fa-expand-arrows-alt"></i>
+            </button>
+            <button
+              class="toolbar-btn"
+              onclick="toggleAutoscale('districtGraph')"
+              title="Autoscale"
+            >
+              <i class="fa-solid fa-arrows-alt-v"></i>
+            </button>
+            <button
+              class="toolbar-btn"
+              onclick="toggleSpikelines('districtGraph')"
+              title="Spikelines"
+            >
+              <i class="fa-solid fa-crosshairs"></i>
+            </button>
+            <button
+              class="toolbar-btn"
+              onclick="togglePanMode('districtGraph')"
+              title="Pan"
+            >
+              <i class="fa-solid fa-hand-paper"></i>
+            </button>
+            <button
+              class="toolbar-btn"
+              onclick="toggleZoomMode('districtGraph')"
+              title="Zoom"
+            >
+              <i class="fa-solid fa-search-plus"></i>
+            </button>
+          </div>
+          <div id="districtGraph" class="w-full h-[500px]"></div>
+        </div>
       </div>
 
       <div
@@ -1516,6 +1662,7 @@
       let availableDistricts = [];
       let selectedDistricts = [];
       let currentLanguage = "hi"; // Default to hindi
+      let currentMode = {}; // Track current mode for each chart
       let traceVisibility = { actual: true, normal: true, deviation: true }; // Track trace visibility
 
       const DEFAULT_TOP_DISTRICTS = [
@@ -2037,11 +2184,13 @@
             itemdoubleclick: false,
           },
           barmode: "group",
+          dragmode: "zoom",
+          hovermode: "x unified",
         };
 
         Plotly.newPlot("districtGraph", [barTrace, lineTrace], layout, {
           responsive: true,
-          displayModeBar: true,
+          displayModeBar: false,
           displaylogo: false,
           modebar: { orientation: "h" },
         });
@@ -2292,6 +2441,140 @@
         } else {
           btn.innerHTML =
             '<i class="fa-solid fa-image text-blue-500 dark:text-blue-300"></i>';
+        }
+      }
+
+      // --- Enhanced Toolbar Functions ---
+      function downloadChart(chartId, filename) {
+        try {
+          Plotly.downloadImage(chartId, {
+            format: "png",
+            width: 1200,
+            height: 700,
+            filename: filename,
+            scale: 2, // Higher quality
+          });
+        } catch (error) {
+          console.error("Download failed:", error);
+          alert(
+            currentLanguage === "en"
+              ? "Download error. Please try again."
+              : "डाउनलोड में त्रुटि आई है। कृपया पुनः प्रयास करें।",
+          );
+        }
+      }
+
+      function resetZoom(chartId) {
+        try {
+          Plotly.relayout(chartId, {
+            "xaxis.autorange": true,
+            "yaxis.autorange": true,
+            "xaxis.fixedrange": false,
+            "yaxis.fixedrange": false,
+          });
+        } catch (error) {
+          console.error("Reset zoom failed:", error);
+        }
+      }
+
+      function toggleAutoscale(chartId) {
+        try {
+          const plotDiv = document.getElementById(chartId);
+          const currentLayout = plotDiv._fullLayout;
+
+          const newFixedRange = !currentLayout.yaxis.fixedrange;
+
+          Plotly.relayout(chartId, {
+            "yaxis.fixedrange": newFixedRange,
+            "xaxis.fixedrange": false,
+          });
+
+          // Visual feedback
+          const button = event.target.closest(".toolbar-btn");
+          if (button)
+            button.style.background = newFixedRange
+              ? "rgba(59, 130, 246, 0.2)"
+              : "transparent";
+        } catch (error) {
+          console.error("Autoscale toggle failed:", error);
+        }
+      }
+
+      function toggleSpikelines(chartId) {
+        try {
+          const plotDiv = document.getElementById(chartId);
+          const currentSpikes = plotDiv._fullLayout.xaxis.showspikes || false;
+          const newSpikeState = !currentSpikes;
+
+          Plotly.relayout(chartId, {
+            "xaxis.showspikes": newSpikeState,
+            "yaxis.showspikes": newSpikeState,
+            "xaxis.spikemode": "across",
+            "yaxis.spikemode": "across",
+            "xaxis.spikesnap": "cursor",
+            "yaxis.spikesnap": "cursor",
+          });
+
+          // Visual feedback
+          const button = event.target.closest(".toolbar-btn");
+          if (button)
+            button.style.background = newSpikeState
+              ? "rgba(59, 130, 246, 0.2)"
+              : "transparent";
+        } catch (error) {
+          console.error("Spikelines toggle failed:", error);
+        }
+      }
+
+      function togglePanMode(chartId) {
+        try {
+          const plotDiv = document.getElementById(chartId);
+          if (!currentMode[chartId]) currentMode[chartId] = "zoom";
+          const newMode = currentMode[chartId] === "pan" ? "zoom" : "pan";
+          currentMode[chartId] = newMode;
+
+          Plotly.relayout(chartId, { dragmode: newMode });
+
+          const buttons =
+            plotDiv.parentElement.querySelectorAll(".toolbar-btn");
+          buttons.forEach((btn) => {
+            if (btn.onclick.toString().includes("PanMode")) {
+              btn.style.background =
+                newMode === "pan" ? "rgba(59, 130, 246, 0.2)" : "transparent";
+            }
+            if (btn.onclick.toString().includes("ZoomMode")) {
+              btn.style.background =
+                newMode === "zoom" ? "rgba(59, 130, 246, 0.2)" : "transparent";
+            }
+          });
+        } catch (error) {
+          console.error("Pan mode toggle failed:", error);
+        }
+      }
+
+      function toggleZoomMode(chartId) {
+        try {
+          const plotDiv = document.getElementById(chartId);
+          if (!currentMode[chartId]) currentMode[chartId] = "zoom";
+          const newMode = currentMode[chartId] === "zoom" ? "pan" : "zoom";
+          currentMode[chartId] = newMode;
+
+          Plotly.relayout(chartId, { dragmode: newMode });
+
+          const buttons =
+            plotDiv.parentElement.querySelectorAll(".toolbar-btn");
+          buttons.forEach((btn) => {
+            if (btn.onclick.toString().includes("PanMode")) {
+              btn.style.background =
+                newMode === "pan" ? "rgba(59, 130, 246, 0.2)" : "transparent";
+            }
+            if (btn.onclick.toString().includes("ZoomMode")) {
+              btn.style.background =
+                newMode === "zoom" ? "rgba(59, 130, 246, 0.2)" : "transparent";
+            }
+          });
+        } catch (error) {
+          console.error("Zoom mode toggle failed:", error);
         }
       }
 
