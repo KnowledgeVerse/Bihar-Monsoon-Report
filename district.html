@@ -233,7 +233,8 @@
       }
 
       /* Custom Dropdown/Checkbox Box */
-      .district-checkbox-dropdown {
+      .district-checkbox-dropdown,
+      .region-checkbox-dropdown {
         position: relative;
         display: inline-block;
       }
@@ -413,6 +414,9 @@
 
       .sort-header.active .sort-icon {
         color: #2563eb;
+      }
+      .dark .sort-header.active .sort-icon {
+        color: #60a5fa;
       }
 
       /* Glowing effect for line */
@@ -1261,12 +1265,32 @@
           class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
         >
           <h2 class="text-2xl font-bold flex items-center gap-2">
-            <i class="fa-solid fa-table-list text-blue-600"></i>
+            <i
+              class="fa-solid fa-table-list text-blue-600 dark:text-blue-400"
+            ></i>
             <span class="gradient-text lang-en">Detailed District Data</span>
             <span class="gradient-text lang-hi">विस्तृत जिला डेटा</span>
           </h2>
 
           <div class="flex flex-wrap items-center gap-3">
+            <!-- Regional Group Dropdown -->
+            <div class="region-checkbox-dropdown relative">
+              <button
+                id="regionDropdownBtn"
+                onclick="toggleRegionDropdown()"
+                class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-150 flex items-center gap-2"
+              >
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="lang-en">Select Region</span>
+                <span class="lang-hi">क्षेत्र चुनें</span>
+                <i class="fa-solid fa-caret-down ml-1"></i>
+              </button>
+              <div
+                id="regionCheckboxContent"
+                class="district-checkbox-content"
+              ></div>
+            </div>
+
             <div class="district-checkbox-dropdown">
               <button
                 id="districtDropdownBtn"
@@ -1426,7 +1450,9 @@
           class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4"
         >
           <h3 class="text-xl font-bold flex items-center gap-2">
-            <i class="fa-solid fa-chart-bar text-purple-600"></i>
+            <i
+              class="fa-solid fa-chart-bar text-purple-600 dark:text-purple-400"
+            ></i>
             <span class="gradient-text lang-en" id="dynamicGraphTitle"
               >District-wise Rainfall Analysis - Monsoon (June-September) -
               2025</span
@@ -1627,6 +1653,10 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot
+              id="dataTableFoot"
+              class="sticky bottom-0 z-20 bg-gray-200 dark:bg-gray-900 border-t-2 border-gray-300 dark:border-gray-600"
+            ></tfoot>
           </table>
         </div>
       </div>
@@ -1710,6 +1740,15 @@
           noDistrict: "No District",
           selected: "Selected",
           changeLanguage: "हिन्दी",
+          reg_northern: "Northern Region",
+          reg_southern: "Southern Region",
+          reg_foothill: "Foothills",
+          reg_nw: "North-West",
+          reg_nc: "North-Central",
+          reg_ne: "North-East",
+          reg_sw: "South-West",
+          reg_sc: "South-Central",
+          reg_se: "South-East",
         },
         hi: {
           home: "होम",
@@ -1746,6 +1785,15 @@
           noDistrict: "कोई जिला नहीं",
           selected: "चयनित",
           changeLanguage: "English",
+          reg_northern: "उत्तरी बिहार",
+          reg_southern: "दक्षिणी बिहार",
+          reg_foothill: "तराई क्षेत्र (Foothills)",
+          reg_nw: "उत्तर-पश्चिम (NW)",
+          reg_nc: "उत्तर-मध्य (NC)",
+          reg_ne: "उत्तर-पूर्व (NE)",
+          reg_sw: "दक्षिण-पश्चिम (SW)",
+          reg_sc: "दक्षिण-मध्य (SC)",
+          reg_se: "दक्षिण-पूर्व (SE)",
         },
       };
 
@@ -1922,6 +1970,223 @@
         return "#1565c0"; // LARGE EXCESS
       }
 
+      // --- Regional Group Filter Logic ---
+      const regionalGroups = {
+        nw: ["West Champaran", "East Champaran", "Saran", "Siwan", "Gopalganj"],
+        nc: [
+          "Sitamarhi",
+          "Madhubani",
+          "Muzaffarpur",
+          "Darbhanga",
+          "Vaishali",
+          "Sheohar",
+          "Samastipur",
+        ],
+        ne: [
+          "Purnea",
+          "Purnia",
+          "Kishanganj",
+          "Araria",
+          "Katihar",
+          "Madhepura",
+          "Saharsa",
+          "Supaul",
+        ],
+        sw: [
+          "Bhojpur",
+          "Buxar",
+          "Kaimur",
+          "Kaimur (Bhabua)",
+          "Bhabua",
+          "Rohtas",
+          "Aurangabad",
+          "Jehanabad",
+          "Arwal",
+        ],
+        sc: [
+          "Patna",
+          "Gaya",
+          "Nalanda",
+          "Sheikhpura",
+          "Nawada",
+          "Begusarai",
+          "Lakhisarai",
+          "Jamui",
+        ],
+        se: ["Bhagalpur", "Banka", "Munger", "Monghyr", "Khagaria"],
+        foothill: [
+          "West Champaran",
+          "East Champaran",
+          "Sitamarhi",
+          "Sheohar",
+          "Madhubani",
+          "Supaul",
+          "Araria",
+          "Kishanganj",
+        ],
+      };
+
+      const macroRegions = {
+        northern: ["nw", "nc", "ne", "foothill"],
+        southern: ["sw", "sc", "se"],
+      };
+
+      function generateRegionCheckboxes() {
+        const container = document.getElementById("regionCheckboxContent");
+        container.innerHTML = "";
+
+        const actionDiv = document.createElement("div");
+        actionDiv.className =
+          "flex justify-between items-center p-2 border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800 sticky top-0 z-10";
+        actionDiv.innerHTML = `
+            <button onclick="handleRegionAction('select_all')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
+                <span class="lang-en">Select All</span><span class="lang-hi">सभी चुनें</span>
+            </button>
+            <button onclick="handleRegionAction('clear_all')" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded shadow-sm transition">
+                <span class="lang-en">Clear All</span><span class="lang-hi">सभी हटाएँ</span>
+            </button>
+        `;
+        container.appendChild(actionDiv);
+
+        const regions = [
+          { id: "northern", isMacro: true },
+          { id: "foothill", isMacro: false },
+          { id: "nw", isMacro: false },
+          { id: "nc", isMacro: false },
+          { id: "ne", isMacro: false },
+          { id: "southern", isMacro: true },
+          { id: "sw", isMacro: false },
+          { id: "sc", isMacro: false },
+          { id: "se", isMacro: false },
+        ];
+
+        regions.forEach((reg) => {
+          const item = document.createElement("div");
+          item.className = `district-checkbox-item ${reg.isMacro ? "font-bold bg-gray-50 dark:bg-gray-800/50 border-y dark:border-gray-700 mt-1" : "pl-8"}`;
+
+          const safeId = `reg-${reg.id}`;
+          const clsMacro = reg.isMacro ? "macro-region" : "micro-region";
+
+          item.innerHTML = `
+                <input type="checkbox" id="${safeId}" value="${reg.id}" 
+                       onchange="handleRegionChange(this)"
+                       class="region-chk ${clsMacro} form-checkbox h-4 w-4 text-teal-600 rounded mr-3 bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600" checked>
+                <label for="${safeId}" class="text-sm text-gray-900 dark:text-gray-100 cursor-pointer w-full flex gap-1">
+                    <span class="lang-en">${translations.en["reg_" + reg.id]}</span>
+                    <span class="lang-hi">${translations.hi["reg_" + reg.id]}</span>
+                </label>
+            `;
+          container.appendChild(item);
+        });
+      }
+
+      function handleRegionAction(action) {
+        const isChecked = action === "select_all";
+        document
+          .querySelectorAll(".region-chk")
+          .forEach((cb) => (cb.checked = isChecked));
+        applyRegionFilter();
+      }
+
+      function handleRegionChange(checkbox) {
+        const val = checkbox.value;
+        const isChecked = checkbox.checked;
+        if (macroRegions[val]) {
+          macroRegions[val].forEach((code) => {
+            const cb = document.getElementById(`reg-${code}`);
+            if (cb) cb.checked = isChecked;
+          });
+        } else {
+          syncMacroRegions();
+        }
+        applyRegionFilter();
+      }
+
+      function syncMacroRegions() {
+        for (const [macro, micros] of Object.entries(macroRegions)) {
+          const macroCb = document.getElementById(`reg-${macro}`);
+          if (macroCb) {
+            const allChecked = micros.every((code) => {
+              const cb = document.getElementById(`reg-${code}`);
+              return cb && cb.checked;
+            });
+            macroCb.checked = allChecked;
+          }
+        }
+      }
+
+      function applyRegionFilter() {
+        const checkedMicro = [];
+        document.querySelectorAll(".region-chk.micro-region").forEach((cb) => {
+          if (cb.checked) checkedMicro.push(cb.value);
+        });
+
+        let finalDistricts = new Set();
+        checkedMicro.forEach((code) => {
+          if (regionalGroups[code]) {
+            regionalGroups[code].forEach((dist) => {
+              const matchedDist = availableDistricts.find((d) =>
+                d.toLowerCase().includes(dist.toLowerCase()),
+              );
+              if (matchedDist) finalDistricts.add(matchedDist);
+            });
+          }
+        });
+
+        selectedDistricts = Array.from(finalDistricts);
+
+        document
+          .querySelectorAll('#districtCheckboxContent input[type="checkbox"]')
+          .forEach((cb) => {
+            if (cb.id !== "selectAllCheckbox") {
+              cb.checked = selectedDistricts.includes(cb.value);
+            }
+          });
+
+        const selectAllCheckbox = document.getElementById("selectAllCheckbox");
+        if (selectAllCheckbox) {
+          selectAllCheckbox.checked =
+            selectedDistricts.length === availableDistricts.length &&
+            availableDistricts.length > 0;
+        }
+
+        updateDropdownButtonText();
+        renderData();
+        renderGraph();
+      }
+
+      function syncRegionCheckboxesFromDistricts() {
+        const selectedDistrictsLower = selectedDistricts.map((d) =>
+          d.toLowerCase(),
+        );
+        document.querySelectorAll(".region-chk.micro-region").forEach((cb) => {
+          const code = cb.value;
+          if (regionalGroups[code]) {
+            const hasAnyDistrictInDataset = regionalGroups[code].some((dist) =>
+              availableDistricts.some((d) =>
+                d.toLowerCase().includes(dist.toLowerCase()),
+              ),
+            );
+
+            if (hasAnyDistrictInDataset) {
+              const allInRegion = regionalGroups[code].every((dist) => {
+                const existsInAvailable = availableDistricts.some((d) =>
+                  d.toLowerCase().includes(dist.toLowerCase()),
+                );
+                if (!existsInAvailable) return true;
+                return selectedDistrictsLower.some((sd) =>
+                  sd.includes(dist.toLowerCase()),
+                );
+              });
+              cb.checked = allInRegion;
+            } else {
+              cb.checked = false;
+            }
+          }
+        });
+        syncMacroRegions();
+      }
+
       // --- District Checkbox Logic ---
       function getSortedDistricts(allDistricts) {
         const topDistrictsLower = DEFAULT_TOP_DISTRICTS.map((d) =>
@@ -2015,6 +2280,7 @@
         renderData();
         renderGraph();
         updateDropdownButtonText();
+        syncRegionCheckboxesFromDistricts();
       }
 
       function handleDistrictSelection(checkbox) {
@@ -2037,6 +2303,7 @@
         renderData();
         renderGraph();
         updateDropdownButtonText();
+        syncRegionCheckboxesFromDistricts();
       }
 
       function updateDropdownButtonText() {
@@ -2053,6 +2320,12 @@
         }
       }
 
+      function toggleRegionDropdown() {
+        document
+          .getElementById("regionCheckboxContent")
+          .classList.toggle("show");
+      }
+
       function toggleDistrictDropdown() {
         document
           .getElementById("districtCheckboxContent")
@@ -2065,9 +2338,18 @@
           !event.target.closest(".district-checkbox-dropdown")
         ) {
           const dropdown = document.getElementById("districtCheckboxContent");
-          if (dropdown && dropdown.classList.contains("show")) {
+          if (dropdown && dropdown.classList.contains("show"))
             dropdown.classList.remove("show");
-          }
+        }
+
+        // Close region dropdown if clicked outside
+        if (
+          !event.target.matches("#regionDropdownBtn") &&
+          !event.target.closest(".region-checkbox-dropdown")
+        ) {
+          const dropdown = document.getElementById("regionCheckboxContent");
+          if (dropdown && dropdown.classList.contains("show"))
+            dropdown.classList.remove("show");
         }
       };
 
@@ -2143,7 +2425,7 @@
             color: isDark ? "#9ca3af" : "#6b7280",
             size: 10,
             line: {
-              color: isDark ? "#ffffff" : "#ffffff",
+              color: isDark ? "#1f2937" : "#ffffff",
               width: 2,
             },
           },
@@ -2245,6 +2527,7 @@
           }
 
           generateDistrictCheckboxes();
+          syncRegionCheckboxesFromDistricts();
           renderData();
           renderGraph();
         } catch (error) {
@@ -2324,12 +2607,21 @@
         const tbody = document.getElementById("dataTableBody");
         tbody.innerHTML = "";
 
+        const tfoot = document.getElementById("dataTableFoot");
+        if (tfoot) tfoot.innerHTML = "";
+
         if (displayData.length === 0) {
           tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500 font-semibold">${translations[currentLanguage].noResults}</td></tr>`;
           return;
         }
 
+        let sumActual = 0;
+        let sumNormal = 0;
+
         displayData.forEach((d) => {
+          sumActual += d.actual;
+          sumNormal += d.normal;
+
           const statusInfo = getRainStatus(d.deviation);
 
           const tr = document.createElement("tr");
@@ -2352,6 +2644,37 @@
             `;
           tbody.appendChild(tr);
         });
+
+        if (tfoot) {
+          const avgActual = sumActual / displayData.length;
+          const avgNormal = sumNormal / displayData.length;
+          let avgDev = 0;
+          if (sumNormal > 0) {
+            avgDev = Math.round(((sumActual - sumNormal) / sumNormal) * 100);
+          }
+
+          const avgStatusInfo = getRainStatus(avgDev);
+          const avgTextClass =
+            avgDev < 0
+              ? "text-red-600 dark:text-red-400"
+              : "text-green-600 dark:text-green-400";
+          const avgLabel =
+            currentLanguage === "en"
+              ? `Average (${displayData.length})`
+              : `औसत (${displayData.length})`;
+
+          tfoot.innerHTML = `
+            <tr class="font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.4)]">
+              <td class="px-6 py-4">${avgLabel}</td>
+              <td class="px-6 py-4 text-right">${avgActual.toFixed(1)}</td>
+              <td class="px-6 py-4 text-right">${avgNormal.toFixed(1)}</td>
+              <td class="px-6 py-4 text-right ${avgTextClass}">${avgDev > 0 ? "+" : ""}${avgDev}%</td>
+              <td class="px-6 py-4 text-center">
+                <span class="status-cell ${avgStatusInfo.color} ${avgStatusInfo.textColor} shadow-sm">${avgStatusInfo.status}</span>
+              </td>
+            </tr>
+          `;
+        }
 
         updateSortIcons();
       }
@@ -2377,17 +2700,14 @@
         document.querySelectorAll(".sort-header").forEach((h) => {
           h.classList.remove("active");
           const icon = h.querySelector(".sort-icon i");
-          icon.className = "fa-solid fa-sort text-gray-400";
+          icon.className = "fa-solid fa-sort text-gray-400 dark:text-gray-500";
 
           if (h.getAttribute("data-sort") === currentSort.column) {
             h.classList.add("active");
-            icon.classList.remove("text-gray-400");
-            icon.classList.add("text-blue-600");
-            if (currentSort.order === "asc") {
-              icon.className = "fa-solid fa-sort-up text-blue-600";
-            } else {
-              icon.className = "fa-solid fa-sort-down text-blue-600";
-            }
+            icon.className =
+              currentSort.order === "asc"
+                ? "fa-solid fa-sort-up text-blue-600 dark:text-blue-400"
+                : "fa-solid fa-sort-down text-blue-600 dark:text-blue-400";
           }
         });
       }
@@ -2602,6 +2922,8 @@
         // Set Hindi as default language
         document.body.classList.add("hindi");
         currentLanguage = "hi";
+
+        generateRegionCheckboxes();
 
         // Set up language switcher state
         const toggle = document.getElementById("langToggle");

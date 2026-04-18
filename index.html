@@ -2317,6 +2317,125 @@
       window.globalData = [];
       window.globalMonthlyData = [];
 
+      // --- Area Weighted Average Rainfall Logic ---
+      window.districtAreaMap = {};
+
+      function normalizeAreaDistrictName(name) {
+        if (!name) return "";
+        let n = name.toLowerCase().trim();
+
+        if (n.includes("purbi") || n.includes("purba") || n.includes("purvi"))
+          n = n.replace(/purb[ia]|purvi/, "east");
+        if (n.includes("pashchim") || n.includes("paschim"))
+          n = n.replace(/pash?chimi?/, "west");
+        if (n.includes("bhabua") || n.includes("kaimur")) n = "kaimur";
+        if (n === "jahanabad") n = "jehanabad";
+        if (n === "monghyr") n = "munger";
+        if (n === "purnia") n = "purnea";
+
+        // Remove spaces, hyphens, and punctuation for strict matching
+        return n.replace(/[^a-z0-9]/g, "");
+      }
+
+      async function loadDistrictAreaMap() {
+        try {
+          const response = await fetch("Bihar_Map/districts.csv");
+          if (!response.ok) throw new Error("districts.csv not found");
+          const csvText = await response.text();
+
+          return new Promise((resolve) => {
+            Papa.parse(csvText, {
+              header: true,
+              skipEmptyLines: true,
+              complete: function (results) {
+                window.districtAreaMap = {};
+                results.data.forEach((row) => {
+                  // Auto-detect District Field
+                  let distRaw =
+                    row["S. No.,DISTRICT NAME"] ||
+                    row["DISTRICT NAME"] ||
+                    row["District"] ||
+                    row["Name"] ||
+                    row["district"] ||
+                    row["district_name"];
+                  if (!distRaw) {
+                    const distKey = Object.keys(row).find(
+                      (k) =>
+                        k.toLowerCase().includes("district") ||
+                        k.toLowerCase().includes("name"),
+                    );
+                    if (distKey) distRaw = row[distKey];
+                  }
+
+                  // Auto-detect Area Field
+                  let areaRaw =
+                    row["Area (sq. km)"] || row["Area"] || row["area"];
+                  if (!areaRaw) {
+                    const areaKey = Object.keys(row).find((k) =>
+                      k.toLowerCase().includes("area"),
+                    );
+                    if (areaKey) areaRaw = row[areaKey];
+                  }
+
+                  if (distRaw && typeof distRaw === "string") {
+                    // Clean mixed formats like "1,ARARIA"
+                    if (distRaw.includes(","))
+                      distRaw = distRaw.split(",")[1].trim();
+
+                    // Skip total Bihar row
+                    if (distRaw.toLowerCase().trim() === "bihar") return;
+
+                    const area = parseFloat(areaRaw);
+                    if (!isNaN(area)) {
+                      window.districtAreaMap[
+                        normalizeAreaDistrictName(distRaw)
+                      ] = area;
+                    }
+                  }
+                });
+                resolve();
+              },
+            });
+          });
+        } catch (err) {
+          console.error("Error loading district areas:", err);
+        }
+      }
+
+      function calculateAreaWeightedRainfall(data, areaMap) {
+        let weightedSum = 0;
+        let totalArea = 0;
+        let missingDistricts = [];
+
+        data.forEach((d) => {
+          // Auto-detect actual rainfall field
+          let distName = d.district || d.name || d.district_name;
+          let actualRain = Number(
+            d.actual ?? d.rainfall ?? d.rain_mm ?? d.value ?? 0,
+          );
+
+          let normName = normalizeAreaDistrictName(distName);
+          let area = areaMap[normName];
+
+          if (area && !isNaN(area) && !isNaN(actualRain)) {
+            weightedSum += actualRain * area;
+            totalArea += area;
+          } else {
+            missingDistricts.push(distName);
+          }
+        });
+
+        if (missingDistricts.length > 0) {
+          console.warn(
+            "Area Weighted Rainfall Calculation: Missing area data for districts:",
+            missingDistricts,
+          );
+        }
+
+        if (totalArea === 0) return null;
+        return (weightedSum / totalArea).toFixed(1);
+      }
+
       // --- Central Color Scheme using HEX values ---
       const RAINFALL_COLORS_HEX = {
         "LARGE EXCESS": "#1565c0", // dark blue (+60% and above)
@@ -2458,15 +2577,46 @@
       function getProcessedMonthlyData(rawData) {
         return rawData
           .map((d) => {
-            const actual = parseFloat(d["Actual R/F (mm)"]) || 0;
-            const normal = parseFloat(d["Normal R/F (mm)"]) || 0;
-            const deviation = parseInt(d["Departure"]) || 0;
+            // Auto-detect keys robustly regardless of exact spelling/case
+            const actualKey = Object.keys(d).find((k) =>
+              k.toLowerCase().includes("actual"),
+            );
+            const normalKey = Object.keys(d).find((k) =>
+              k.toLowerCase().includes("normal"),
+            );
+            const depKey = Object.keys(d).find(
+              (k) =>
+                k.toLowerCase().includes("dep") ||
+                k.toLowerCase().includes("dev") ||
+                k.toLowerCase().includes("%"),
+            );
+            const distKey = Object.keys(d).find(
+              (k) =>
+                k.toLowerCase().includes("district") ||
+                k.toLowerCase().includes("name"),
+            );
+            const monthKey = Object.keys(d).find((k) =>
+              k.toLowerCase().includes("month"),
+            );
+
+            const actual = actualKey ? parseFloat(d[actualKey]) || 0 : 0;
+            const normal = normalKey ? parseFloat(d[normalKey]) || 0 : 0;
+            const deviation = depKey ? parseInt(d[depKey]) || 0 : 0;
+
+            let monthName =
+              monthKey && d[monthKey] ? String(d[monthKey]).trim() : "Unknown";
+
+            // Normalize month name to strictly "June", "July", "August", "September"
+            const mLower = monthName.toLowerCase();
+            if (mLower.startsWith("jun")) monthName = "June";
+            else if (mLower.startsWith("jul")) monthName = "July";
+            else if (mLower.startsWith("aug")) monthName = "August";
+            else if (mLower.startsWith("sep")) monthName = "September";
 
             return {
-              district: d["DISTRICT NAME"]
-                ? d["DISTRICT NAME"].trim()
-                : "Unknown",
-              month: d["MONTH"] ? d["MONTH"].trim() : "Unknown",
+              district:
+                distKey && d[distKey] ? String(d[distKey]).trim() : "Unknown",
+              month: monthName,
               actual: actual,
               normal: normal,
               deviation: deviation,
@@ -2628,7 +2778,16 @@
 
         const totalActual = data.reduce((sum, d) => sum + d.actual, 0);
         const totalNormal = data.reduce((sum, d) => sum + d.normal, 0);
-        const avgActual = (totalActual / data.length).toFixed(1);
+
+        // Calculate Area Weighted Average Rainfall
+        const weightedActual = calculateAreaWeightedRainfall(
+          data,
+          window.districtAreaMap,
+        );
+        const avgActual =
+          weightedActual !== null
+            ? weightedActual
+            : (totalActual / data.length).toFixed(1);
 
         let avgDev = 0;
         if (totalNormal > 0) {
@@ -2979,24 +3138,42 @@
               totalActual: 0,
               totalNormal: 0,
               count: 0,
+              weightedActualSum: 0,
+              weightedNormalSum: 0,
+              totalArea: 0,
             };
           }
+
+          let distName = d.district || d.name || d.district_name;
+          let normName = normalizeAreaDistrictName(distName);
+          let area = window.districtAreaMap[normName];
+
+          if (area && !isNaN(area)) {
+            monthlyAverages[d.month].weightedActualSum += d.actual * area;
+            monthlyAverages[d.month].weightedNormalSum += d.normal * area;
+            monthlyAverages[d.month].totalArea += area;
+          }
+
           monthlyAverages[d.month].totalActual += d.actual;
           monthlyAverages[d.month].totalNormal += d.normal;
           monthlyAverages[d.month].count++;
         });
 
         const plotMonths = monthOrder.filter((m) => monthlyAverages[m]);
-        const avgActuals = plotMonths.map((m) =>
-          (monthlyAverages[m].totalActual / monthlyAverages[m].count).toFixed(
-            1,
-          ),
-        );
-        const avgNormals = plotMonths.map((m) =>
-          (monthlyAverages[m].totalNormal / monthlyAverages[m].count).toFixed(
-            1,
-          ),
-        );
+        const avgActuals = plotMonths.map((m) => {
+          const mData = monthlyAverages[m];
+          if (mData.totalArea > 0)
+            return (mData.weightedActualSum / mData.totalArea).toFixed(1);
+          // Fallback if area data is missing
+          return (mData.totalActual / mData.count).toFixed(1);
+        });
+        const avgNormals = plotMonths.map((m) => {
+          const mData = monthlyAverages[m];
+          if (mData.totalArea > 0)
+            return (mData.weightedNormalSum / mData.totalArea).toFixed(1);
+          // Fallback if area data is missing
+          return (mData.totalNormal / mData.count).toFixed(1);
+        });
 
         const isDark = document.documentElement.classList.contains("dark");
         const fontColor = isDark ? "#cbd5e1" : "#334155";
@@ -3374,7 +3551,7 @@
       // --- Initialize Dashboard ---
 
       // --- Initialize Dashboard ---
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         // 1. साल की लिस्ट (Dropdown) तैयार करें
         if (typeof setupYearDropdown === "function") {
           setupYearDropdown();
@@ -3404,6 +3581,9 @@
           document.body.classList.add("simple-bg");
         }
         updateBackgroundBtnIcon(savedSimple);
+
+        // Area Weighted Average Rainfall के लिए Area Data Load करें
+        await loadDistrictAreaMap();
 
         // 4. मानसून आगमन की CSV फाइल लोड करें
         if (typeof Papa !== "undefined") {
