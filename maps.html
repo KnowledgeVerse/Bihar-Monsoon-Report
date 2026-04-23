@@ -1584,6 +1584,102 @@
       let currentMonth = "Overall";
       let currentLanguage = "hi"; // Default to Hindi
 
+      // --- Area Weighted Average Rainfall Logic ---
+      window.districtAreaMap = {};
+
+      function normalizeAreaDistrictName(name) {
+        if (!name) return "";
+        let n = name.toLowerCase().trim();
+
+        if (n.includes("purbi") || n.includes("purba") || n.includes("purvi"))
+          n = n.replace(/purb[ia]|purvi/, "east");
+        if (n.includes("pashchim") || n.includes("paschim"))
+          n = n.replace(/pash?chimi?/, "west");
+        if (n.includes("bhabua") || n.includes("kaimur")) n = "kaimur";
+        if (n === "jahanabad") n = "jehanabad";
+        if (n === "monghyr") n = "munger";
+        if (n === "purnia") n = "purnea";
+
+        return n.replace(/[^a-z0-9]/g, "");
+      }
+
+      async function loadDistrictAreaMap() {
+        try {
+          const response = await fetch("Bihar_Map/districts.csv");
+          if (!response.ok) throw new Error("districts.csv not found");
+          const csvText = await response.text();
+
+          return new Promise((resolve) => {
+            Papa.parse(csvText, {
+              header: true,
+              skipEmptyLines: true,
+              complete: function (results) {
+                window.districtAreaMap = {};
+                results.data.forEach((row) => {
+                  let distRaw =
+                    row["S. No.,DISTRICT NAME"] ||
+                    row["DISTRICT NAME"] ||
+                    row["District"] ||
+                    row["Name"] ||
+                    row["district"] ||
+                    row["district_name"];
+                  if (!distRaw) {
+                    const distKey = Object.keys(row).find(
+                      (k) =>
+                        k.toLowerCase().includes("district") ||
+                        k.toLowerCase().includes("name"),
+                    );
+                    if (distKey) distRaw = row[distKey];
+                  }
+                  let areaRaw =
+                    row["Area (sq. km)"] || row["Area"] || row["area"];
+                  if (!areaRaw) {
+                    const areaKey = Object.keys(row).find((k) =>
+                      k.toLowerCase().includes("area"),
+                    );
+                    if (areaKey) areaRaw = row[areaKey];
+                  }
+
+                  if (distRaw && typeof distRaw === "string") {
+                    if (distRaw.includes(","))
+                      distRaw = distRaw.split(",")[1].trim();
+                    if (distRaw.toLowerCase().trim() === "bihar") return;
+                    const area = parseFloat(areaRaw);
+                    if (!isNaN(area)) {
+                      window.districtAreaMap[
+                        normalizeAreaDistrictName(distRaw)
+                      ] = area;
+                    }
+                  }
+                });
+                resolve();
+              },
+            });
+          });
+        } catch (err) {
+          console.error("Error loading district areas:", err);
+        }
+      }
+
+      function calculateAreaWeightedRainfall(districtDataObj, field) {
+        let weightedSum = 0;
+        let totalArea = 0;
+
+        for (const distName in districtDataObj) {
+          let value = Number(districtDataObj[distName][field] || 0);
+          let normName = normalizeAreaDistrictName(distName);
+          let area = window.districtAreaMap[normName];
+
+          if (area && !isNaN(area) && !isNaN(value)) {
+            weightedSum += value * area;
+            totalArea += area;
+          }
+        }
+
+        if (totalArea === 0) return null;
+        return weightedSum / totalArea;
+      }
+
       // --- Language Switching ---
       function toggleLanguage() {
         const toggle = document.getElementById("langToggle");
@@ -2050,8 +2146,23 @@
           });
 
           if (!stateDataFound && count > 0) {
-            stateActual = totalActual / count;
-            stateNormal = totalNormal / count;
+            let avgActual = totalActual / count;
+            let avgNormal = totalNormal / count;
+
+            const weightedActual = calculateAreaWeightedRainfall(
+              districtData,
+              "actual",
+            );
+            const weightedNormal = calculateAreaWeightedRainfall(
+              districtData,
+              "normal",
+            );
+
+            if (weightedActual !== null) avgActual = weightedActual;
+            if (weightedNormal !== null) avgNormal = weightedNormal;
+
+            stateActual = avgActual;
+            stateNormal = avgNormal;
             stateDep =
               stateNormal > 0
                 ? ((stateActual - stateNormal) / stateNormal) * 100
@@ -2427,7 +2538,7 @@
       }
 
       // Init
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         // Set default language to Hindi
         document.body.classList.add("hindi");
         currentLanguage = "hi";
@@ -2439,6 +2550,8 @@
         // Ensure default year 2025 is selected
         const yearSelect = document.getElementById("mapYear");
         if (!yearSelect.value) yearSelect.value = "2025";
+
+        await loadDistrictAreaMap();
 
         // Initialize with proper language display
         updateLanguageContent();

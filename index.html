@@ -1071,7 +1071,7 @@
 
           <div class="flex items-center gap-3 nav-logo shrink-0">
             <img
-              src="assets/logo.png"
+              src="assets/logo.png?v=2.0"
               alt="IMD Logo"
               class="h-8 w-8 object-contain dark:invert"
             />
@@ -2339,7 +2339,7 @@
 
       async function loadDistrictAreaMap() {
         try {
-          const response = await fetch("Bihar_Map/districts.csv");
+          const response = await fetch("Bihar_Map/districts.csv?v=2.0");
           if (!response.ok) throw new Error("districts.csv not found");
           const csvText = await response.text();
 
@@ -2402,38 +2402,26 @@
         }
       }
 
-      function calculateAreaWeightedRainfall(data, areaMap) {
+      function calculateAreaWeightedRainfall(data, field) {
         let weightedSum = 0;
         let totalArea = 0;
-        let missingDistricts = [];
 
         data.forEach((d) => {
           // Auto-detect actual rainfall field
           let distName = d.district || d.name || d.district_name;
-          let actualRain = Number(
-            d.actual ?? d.rainfall ?? d.rain_mm ?? d.value ?? 0,
-          );
+          let value = Number(d[field] || 0);
 
           let normName = normalizeAreaDistrictName(distName);
-          let area = areaMap[normName];
+          let area = window.districtAreaMap[normName];
 
-          if (area && !isNaN(area) && !isNaN(actualRain)) {
-            weightedSum += actualRain * area;
+          if (area && !isNaN(area) && !isNaN(value)) {
+            weightedSum += value * area;
             totalArea += area;
-          } else {
-            missingDistricts.push(distName);
           }
         });
 
-        if (missingDistricts.length > 0) {
-          console.warn(
-            "Area Weighted Rainfall Calculation: Missing area data for districts:",
-            missingDistricts,
-          );
-        }
-
         if (totalArea === 0) return null;
-        return (weightedSum / totalArea).toFixed(1);
+        return weightedSum / totalArea;
       }
 
       // --- Central Color Scheme using HEX values ---
@@ -2496,7 +2484,7 @@
        * CSV फ़ाइल को फ़ETCH करता है और Papa Parse का उपयोग करके उसे JSON Array में पार्स करता है।
        */
       async function loadCSVData(year, periodKey) {
-        const filePath = `data/${year}/${periodKey}.csv`;
+        const filePath = `data/${year}/${periodKey}.csv?v=2.0`;
 
         try {
           console.log(`Fetching data from: ${filePath}`);
@@ -2780,20 +2768,17 @@
         const totalNormal = data.reduce((sum, d) => sum + d.normal, 0);
 
         // Calculate Area Weighted Average Rainfall
-        const weightedActual = calculateAreaWeightedRainfall(
-          data,
-          window.districtAreaMap,
-        );
+        const weightedActual = calculateAreaWeightedRainfall(data, "actual");
+        const weightedNormal = calculateAreaWeightedRainfall(data, "normal");
+
         const avgActual =
-          weightedActual !== null
-            ? weightedActual
-            : (totalActual / data.length).toFixed(1);
+          weightedActual !== null ? weightedActual : totalActual / data.length;
+        const avgNormal =
+          weightedNormal !== null ? weightedNormal : totalNormal / data.length;
 
         let avgDev = 0;
-        if (totalNormal > 0) {
-          avgDev = Math.round(
-            ((totalActual - totalNormal) / totalNormal) * 100,
-          );
+        if (avgNormal > 0) {
+          avgDev = Math.round(((avgActual - avgNormal) / avgNormal) * 100);
         }
 
         const deficitCount = data.filter((d) => d.deviation < -19).length;
@@ -2805,7 +2790,7 @@
         );
 
         document.getElementById("statAvgRain").innerText =
-          `${avgActual} ${currentLanguage === "en" ? "mm" : "मिमी"}`;
+          `${Number(avgActual).toFixed(1)} ${currentLanguage === "en" ? "mm" : "मिमी"}`;
         const devElem = document.getElementById("statAvgDev");
         devElem.innerText = `${avgDev}%`;
 
@@ -3129,50 +3114,57 @@
 
       // --- Line Chart ---
       function renderLineChart(data) {
-        const monthlyAverages = {};
         const monthOrder = ["June", "July", "August", "September"];
+        const dataByMonth = {
+          June: [],
+          July: [],
+          August: [],
+          September: [],
+        };
 
         data.forEach((d) => {
-          if (!monthlyAverages[d.month]) {
-            monthlyAverages[d.month] = {
-              totalActual: 0,
-              totalNormal: 0,
-              count: 0,
-              weightedActualSum: 0,
-              weightedNormalSum: 0,
-              totalArea: 0,
-            };
+          if (dataByMonth[d.month]) {
+            dataByMonth[d.month].push(d);
           }
-
-          let distName = d.district || d.name || d.district_name;
-          let normName = normalizeAreaDistrictName(distName);
-          let area = window.districtAreaMap[normName];
-
-          if (area && !isNaN(area)) {
-            monthlyAverages[d.month].weightedActualSum += d.actual * area;
-            monthlyAverages[d.month].weightedNormalSum += d.normal * area;
-            monthlyAverages[d.month].totalArea += area;
-          }
-
-          monthlyAverages[d.month].totalActual += d.actual;
-          monthlyAverages[d.month].totalNormal += d.normal;
-          monthlyAverages[d.month].count++;
         });
 
-        const plotMonths = monthOrder.filter((m) => monthlyAverages[m]);
-        const avgActuals = plotMonths.map((m) => {
-          const mData = monthlyAverages[m];
-          if (mData.totalArea > 0)
-            return (mData.weightedActualSum / mData.totalArea).toFixed(1);
-          // Fallback if area data is missing
-          return (mData.totalActual / mData.count).toFixed(1);
-        });
-        const avgNormals = plotMonths.map((m) => {
-          const mData = monthlyAverages[m];
-          if (mData.totalArea > 0)
-            return (mData.weightedNormalSum / mData.totalArea).toFixed(1);
-          // Fallback if area data is missing
-          return (mData.totalNormal / mData.count).toFixed(1);
+        const plotMonths = [];
+        const avgActuals = [];
+        const avgNormals = [];
+
+        monthOrder.forEach((m) => {
+          if (dataByMonth[m].length > 0) {
+            plotMonths.push(m);
+
+            let wActual = calculateAreaWeightedRainfall(
+              dataByMonth[m],
+              "actual",
+            );
+            let wNormal = calculateAreaWeightedRainfall(
+              dataByMonth[m],
+              "normal",
+            );
+
+            if (wActual !== null) {
+              avgActuals.push(wActual.toFixed(1));
+            } else {
+              let sumAct = dataByMonth[m].reduce(
+                (s, d) => s + Number(d.actual || 0),
+                0,
+              );
+              avgActuals.push((sumAct / dataByMonth[m].length).toFixed(1));
+            }
+
+            if (wNormal !== null) {
+              avgNormals.push(wNormal.toFixed(1));
+            } else {
+              let sumNorm = dataByMonth[m].reduce(
+                (s, d) => s + Number(d.normal || 0),
+                0,
+              );
+              avgNormals.push((sumNorm / dataByMonth[m].length).toFixed(1));
+            }
+          }
         });
 
         const isDark = document.documentElement.classList.contains("dark");
@@ -3587,21 +3579,24 @@
 
         // 4. मानसून आगमन की CSV फाइल लोड करें
         if (typeof Papa !== "undefined") {
-          Papa.parse("Onset and Withdrawal of SW monsoon over Bihar.csv", {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
-            complete: function (results) {
-              // ग्लोबल वेरिएबल में डेटा स्टोर करें
-              window.monsoonArrivalData = results.data;
-              // मुख्य डैशबोर्ड अपडेट करें
-              updateDashboard();
+          Papa.parse(
+            "Onset and Withdrawal of SW monsoon over Bihar.csv?v=2.0",
+            {
+              download: true,
+              header: true,
+              skipEmptyLines: true,
+              complete: function (results) {
+                // ग्लोबल वेरिएबल में डेटा स्टोर करें
+                window.monsoonArrivalData = results.data;
+                // मुख्य डैशबोर्ड अपडेट करें
+                updateDashboard();
+              },
+              error: function (err) {
+                console.error("Monsoon CSV error:", err);
+                updateDashboard();
+              },
             },
-            error: function (err) {
-              console.error("Monsoon CSV error:", err);
-              updateDashboard();
-            },
-          });
+          );
         } else {
           updateDashboard();
         }
@@ -3625,6 +3620,6 @@
         yearSelect.innerHTML = yearOptions;
       }
     </script>
-    <script src="monsoon-arrival.js"></script>
+    <script src="monsoon-arrival.js?v=2.0"></script>
   </body>
 </html>

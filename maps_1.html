@@ -798,7 +798,7 @@
         <div class="flex flex-wrap items-center justify-between w-full gap-4">
           <div class="flex items-center gap-3 nav-logo shrink-0">
             <img
-              src="assets/logo.png"
+              src="assets/logo.png?v=2.0"
               alt="IMD Logo"
               class="h-8 w-8 object-contain dark:invert hidden sm:block"
             />
@@ -1317,7 +1317,7 @@
 
         // Construct Path: maps/{year}/{filename}
         const fileName = mapFiles[currentMonth];
-        const imagePath = `maps/${currentYear}/${fileName}`;
+        const imagePath = `maps/${currentYear}/${fileName}?v=2.0`;
 
         // Set Source
         img.src = imagePath;

@@ -118,7 +118,7 @@ function updateMonsoonUI(year) {
 }
 
 // मानसून CSV को लोड करने का काम
-Papa.parse("Onset and Withdrawal of SW monsoon over Bihar.csv", {
+Papa.parse("Onset and Withdrawal of SW monsoon over Bihar.csv?v=2.0", {
   download: true,
   header: true,
   skipEmptyLines: true,

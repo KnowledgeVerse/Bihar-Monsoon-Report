@@ -984,7 +984,7 @@
         <div class="flex flex-wrap items-center justify-between w-full gap-4">
           <div class="flex items-center gap-3 nav-logo shrink-0">
             <img
-              src="assets/logo.png"
+              src="assets/logo.png?v=2.0"
               alt="IMD Logo"
               class="h-8 w-8 object-contain dark:invert"
             />
@@ -1954,7 +1954,7 @@
 
       // Generic fetch function
       async function loadCSVData(year, filename) {
-        const filePath = `data/${year}/${filename}`;
+        const filePath = `data/${year}/${filename}?v=2.0`;
 
         try {
           const response = await fetch(filePath, { cache: "no-store" });
